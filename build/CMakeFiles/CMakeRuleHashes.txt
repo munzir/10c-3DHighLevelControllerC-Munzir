@@ -1,3 +1,0 @@
-# Hashes of file build rules.
-b4eb726a3042bb02ce46a0b930aa4ff0 examples/krang2d/CMakeFiles/Krang2D_automoc
-d21b2aca63524d9e55c1386a06b8b2e6 examples/krang2d/ui_krang2dwindow.h
