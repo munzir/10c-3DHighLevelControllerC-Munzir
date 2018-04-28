@@ -104,8 +104,8 @@ void *Krang2DPlant::qt_metacast(const char *_clname)
     if (!_clname) return Q_NULLPTR;
     if (!strcmp(_clname, qt_meta_stringdata_Krang2DPlant.stringdata0))
         return static_cast<void*>(const_cast< Krang2DPlant*>(this));
-    if (!strcmp(_clname, "Plant<double,4,1>"))
-        return static_cast< Plant<double,4,1>*>(const_cast< Krang2DPlant*>(this));
+    if (!strcmp(_clname, "Plant<double,8,2>"))
+        return static_cast< Plant<double,8,2>*>(const_cast< Krang2DPlant*>(this));
     return QObject::qt_metacast(_clname);
 }
 
