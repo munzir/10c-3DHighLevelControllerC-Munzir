@@ -12,82 +12,126 @@
 #include <QtCore>
 #include <QVector>
 
-template <class T>
-struct Krang2D: public Dynamics<T, 4, 1>
-{
-    using State = typename Dynamics<T, 4, 1>::State;
-    using Control = typename Dynamics<T, 4, 1>::Control;
 
-    Krang2D(T g, T M, T m, T L, T R,T iw, T I) : gravity(g), totalmass(M), masswheel(m), length(L), radius(R), inertiawheel(iw), inertia (I) {}
+struct param {
+    double R, mw, Iw, L, g;
+    double m_1;
+    double MX_1, MY_1, MZ_1;
+    double XX_1, YY_1, ZZ_1;
+    double XY_1, YZ_1, XZ_1;
+    double fric_1;
+    double XXw, YYw, ZZw;
+};
+
+template <class T>
+struct Krang2D: public Dynamics<T, 8, 2>
+{
+    using State = typename Dynamics<T, 8, 2>::State;
+    using Control = typename Dynamics<T, 8, 2>::Control;
+
+    Krang2D(param p)  {
+        R = p.R, mw = p.mw, Iw = p.Iw, L = p.L, g=p.g;
+        m_1 = p.m_1;
+        MX_1 = p.MX_1, MY_1 = p.MY_1, MZ_1 = p.MZ_1;
+        XX_1 = p.XX_1, YY_1 = p.YY_1, ZZ_1 = p.ZZ_1;
+        XY_1 = p.XY_1, YZ_1 = p.YZ_1, XZ_1 = p.YZ_1;
+        fric_1 = p.fric_1;
+        XXw = p.XXw, YYw=p.YYw, ZZw=p.ZZw;
+
+        A(0,0) = (2*YYw + R*R*m_1 + 2*R*R*mw)/(R*R);
+        A(0,1) = MX_1;
+        A(1,0) = MX_1;
+        A(2,2) = XX_1;
+        C(0,0) = 0;
+        C(2,0) = 0;
+        C(2,2) = 0;
+        Q(0) = 0;
+        Q(1) = 0;
+        B(0,0) = -1/R;
+        B(0,1) = 0;
+        B(1,0) = 0;
+        B(1,1) = L/(2*R);
+        B(2,0) = 1;
+        B(2,1) = 0;
+        newBu(0) = 0;
+    }
     inline State f(const Eigen::Ref<const State> &x, const Eigen::Ref<const Control> &u)
     {
         using std::sin; using std::cos;
-
         // state transition = [thetadot, force, xdot, xddot]
-        State dx;
+        State xdot;
 
-        // state = [theta, thetadot,x,xdot]
-        const T force = u.value();
-        const T costheta = cos(x(0));
-        const T sintheta = sin(x(0));
+        xx = x(0); psii = x(1); q_imu = x(2);
+        dx = x(3); dpsi = x(4); dq_imu = x(5);
+        X0 = x(6); Y0 = x(7);
+        A(0,2) = MY_1*cos(q_imu) + MZ_1*sin(q_imu);
+        A(1,1) = (L*L*YYw + 4*R*R*XXw - 2*R*R*XXw*pow(cos((2*xx + L*psii)/(2*R)), 2) - 2*R*R*XXw*pow(cos((2*xx - L*psii)/(2*R)), 2) \
+            + 2*R*R*ZZw*pow(cos((2*xx + L*psii)/(2*R)), 2) + 2*R*R*ZZw*pow(cos((2*xx - L*psii)/(2*R)), 2) + L*L*R*R*mw + 2*R*R*YY_1*pow(cos(q_imu), 2) \
+            + 2*R*R*YZ_1*sin(2*q_imu) + 2*R*R*ZZ_1*pow(sin(q_imu),2))/(2*R*R);
+        A(1,2) = - XY_1*cos(q_imu) - XZ_1*sin(q_imu);
+        A(2,0) = MY_1*cos(q_imu) + MZ_1*sin(q_imu);
+        A(2,1) = - XY_1*cos(q_imu) - XZ_1*sin(q_imu);
+        C(0,1) = -(dpsi*(XXw*sin((2*xx + L*psii)/R) + XXw*sin((2*xx - L*psii)/R) - ZZw*sin((2*xx + L*psii)/R) - ZZw*sin((2*xx - L*psii)/R) - 2*R*MZ_1*cos(q_imu) \
+            + 2*R*MY_1*sin(q_imu)))/(2*R);
+        C(0,2) = dq_imu*(MZ_1*cos(q_imu) - MY_1*sin(q_imu));
+        C(1,0) = (dpsi*(sin((2*xx + L*psii)/R)/2 + sin((2*xx - L*psii)/R)/2)*(XXw - ZZw))/R;
+        C(1,1) = (4*R*MY_1*sin(q_imu) - 4*R*MZ_1*cos(q_imu) + 2*dx*XXw*sin((2*xx + L*psii)/R) + 2*dx*XXw*sin((2*xx - L*psii)/R) - 2*dx*ZZw*sin((2*xx + L*psii)/R) \
+            - 2*dx*ZZw*sin((2*xx - L*psii)/R) + L*XXw*dpsi*sin((2*xx + L*psii)/R) - L*XXw*dpsi*sin((2*xx - L*psii)/R) - L*ZZw*dpsi*sin((2*xx + L*psii)/R) \
+            + L*ZZw*dpsi*sin((2*xx - L*psii)/R) + 4*R*YZ_1*dq_imu*cos(2*q_imu) - 2*R*YY_1*dq_imu*sin(2*q_imu) + 2*R*ZZ_1*dq_imu*sin(2*q_imu))/(4*R);
+        C(1,2) = XY_1*dq_imu*sin(q_imu) - XZ_1*dq_imu*cos(q_imu) + YZ_1*dpsi*(2*pow(cos(q_imu), 2) - 1) - YY_1*dpsi*cos(q_imu)*sin(q_imu) + ZZ_1*dpsi*cos(q_imu)*sin(q_imu);
+        C(2,1) = -dpsi*(YZ_1*cos(2*q_imu) - (YY_1*sin(2*q_imu))/2 + (ZZ_1*sin(2*q_imu))/2);
+        Q(2) = g*MZ_1*cos(q_imu) - g*MY_1*sin(q_imu);
+        Gamma_fric(0) = (2*fric_1*(dq_imu - dx/R))/R;
+        Gamma_fric(1) = -(L*L*dpsi*fric_1)/(2*R*R);
+        Gamma_fric(2) = -2*fric_1*(dq_imu - dx/R);
 
-        const T alpha = ((radius/(totalmass*length))*totalmass+masswheel+(inertiawheel/(radius*radius)));
-        const T beta = inertia/(totalmass*length);
-        const T xddot = (gravity*sintheta-(radius*sintheta*x(1)*x(1)) - (beta+costheta)*force)/(alpha+costheta);
-
-        dx(0) = x(1);
-        dx(1) = force;
-        dx(2) = x(3);
-        dx(3) = xddot;
-
-        return dx;
-//        State delta_x;
-//
-//        T xx = x(2);
-//        T dx = x(3);
-//        T q1 = x(0);
-//        T dq1 = x(1);
-//
-//        T g = 9.8;
-//        T dt = 1;
-//        T MX1 = 0;
-//        T R = 0.25;
-//        T fric1 = 0.400;
-//        T MY1 = 31.4484;
-//        T Iw = 0.0051;
-//        T m1 = 115.256;
-//        T mw = 0.51;
-//
-//        // somehow the actual length in matlab
-//        T L1 = 0.5457;
-//
-//        // somehow the actual inertia in matlab
-//        T I1 = 11.4412;
-//
-//        // RESULT OF COMPUTE TORQUE
-//        T tau1 = u.value();
-//
-//        // change in theta
-//        delta_x(0) = x(1);
-//        // change in theta dot
-//        delta_x(1) = (dt*(Iw*R*tau1 + Iw*dx*fric1 + pow(R,3)*m1*tau1 + pow(R,3)*mw*tau1 - pow(R,3)*dq1*fric1*m1 + pow(R,2)*dx*fric1*m1 - pow(R,3)*dq1*fric1*mw + pow(R,2)*dx*fric1*mw + MY1*pow(R,2)*tau1*cos(q1) - MX1*pow(R,2)*tau1*sin(q1) - Iw*R*dq1*fric1 + MX1*pow(R,3)*g*m1*cos(q1) + MX1*pow(R,3)*g*mw*cos(q1) + MX1*pow(R,2)*dq1*fric1*sin(q1) + MY1*pow(R,3)*g*m1*sin(q1)+ MY1*pow(R,3)*g*mw*sin(q1) + pow(MX1,2)*pow(R,3)*pow(dq1,2)*cos(q1)*sin(q1) - pow(MY1,2)*pow(R,3)*pow(dq1,2)*cos(q1)*sin(q1) + Iw*MX1*R*g*cos(q1) + Iw*MY1*R*g*sin(q1) + MY1*R*dx*fric1*cos(q1) - MX1*MY1*pow(R,3)*pow(dq1,2)*pow(cos(q1),2) - MX1*R*dx*fric1*sin(q1) + MX1*MY1*pow(R,3)*pow(dq1,2)*pow(sin(q1),2) - MY1*pow(R,2)*dq1*fric1*cos(q1)))/(R*(I1*Iw - pow(MX1,2)*pow(R,2)*pow(sin(q1),2) + I1*pow(R,2)*m1 + I1*pow(R,2)*mw - pow(MY1,2)*pow(R,2)*pow(cos(q1),2) + 2*MX1*MY1*pow(R,2)*cos(q1)*sin(q1)));
-//        // change in x
-//        delta_x(2) = x(3);
-//        // change in x dot
-//        delta_x(3) = (dt*(MX1*pow(R, 2)*tau1*sin(q1) - I1*dx*fric1 - MY1*pow(R, 2)*tau1*cos(q1) - I1*R*tau1 + I1*R*dq1*fric1 - MX1*pow(R, 2)*dq1*fric1*sin(q1) + I1*MX1*pow(R, 2)*pow(dq1, 2)*cos(q1) - MX1*MY1*pow(R,2)*g*pow(cos(q1), 2) + I1*MY1*pow(R,2)*pow(dq1,2)*sin(q1) + MX1*MY1*pow(R,2)*g*pow(sin(q1),2) - MY1*R*dx*fric1*cos(q1) + MX1*R*dx*fric1*sin(q1) + pow(MX1,2)*pow(R,2)*g*cos(q1)*sin(q1) - pow(MY1,2)*pow(R,2)*g*cos(q1)*sin(q1) + MY1*pow(R,2)*dq1*fric1*cos(q1)))/(I1*Iw - pow(MX1,2)*pow(R,2)*pow(sin(q1),2) + I1*pow(R,2)*m1 + I1*pow(R,2)*mw - pow(MY1,2)*pow(R,2)*pow(cos(q1),2) + 2*MX1*MY1*pow(R,2)*cos(q1)*sin(q1));
-//
-//
-//        return delta_x;
-
+        dq << dx, dpsi, dq_imu;
+        ddth = u(0);
+        tau_0 = u(1);
+        // A*ddqVec + C*dqVec + Q - Gamma_fric= [ -tau_1/R; (L*tau_0)/(2*R); tau_1]
+        // A*ddqVec + h = [ -tau_1/R; (L*tau_0)/(2*R); tau_1], where
+        h = C*dq + Q - Gamma_fric;
+        // R times first equation added to third equation results in
+        // [R*A(1,1)+A(3,1), R*A(1,2)+A(3,2); A(2,1), A(2,2)]*[ddxx; ddpsi] 
+        //   + [R*A(1,3)+A(3,3); A(2,3)]*ddth + [R*h(1)+h(3); h(2)] = [0; (L*tau_0)/(2*R)]
+        // newA*[ddxx; ddpsi] + newh = [0; (L*tau_0)/(2*R)], where:
+        newA(0,0) = R*A(0,0)+A(2,0);
+        newA(0,1) = R*A(0,1)+A(2,1); 
+        newA(1,0) = A(1,0);
+        newA(1,1) = A(1,1);
+        newh(0) = (R*A(0,2)+A(2,2))*ddth + R*h(0)+h(2);
+        newh(1) = A(1,2)*ddth + h(1);
+        newBu(1) = (L*tau_0)/(2*R);
+        xdot << dq, newA.colPivHouseholderQr().solve(-newh+newBu), ddth, dx*cos(psii), dx*sin(psii);
+        
+        return xdot;
     }
 
-    T gravity;
-    T totalmass;
-    T masswheel;
-    T length;
-    T radius;
-    T inertia;
-    T inertiawheel;
+    T R, mw, Iw, L, g;
+    T m_1;
+    T MX_1, MY_1, MZ_1;
+    T XX_1, YY_1, ZZ_1;
+    T XY_1, YZ_1, XZ_1;
+    T fric_1;
+    T XXw, YYw, ZZw;
+
+    T xx, psii, q_imu;
+    T dx, dpsi, dq_imu;
+    T X0, Y0;
+
+    T ddth, tau_0;
+
+    Eigen::Matrix<T, 3, 3> A;
+    Eigen::Matrix<T, 3, 3> C;
+    Eigen::Matrix<T, 3, 1> Q;
+    Eigen::Matrix<T, 3, 1> Gamma_fric;
+    Eigen::Matrix<T, 3, 2> B;
+    Eigen::Matrix<T, 3, 1> h;
+    Eigen::Matrix<T, 3, 1> dq;
+    Eigen::Matrix<T, 2, 2> newA;
+    Eigen::Matrix<T, 2, 1> newh;
+    Eigen::Matrix<T, 2, 1> newBu;
+    
 };
 
 template <class T>
@@ -200,9 +244,9 @@ private:
     Hessian Q_;
 };
 
-struct Krang2DPlant: public QObject, public Plant<double, 4, 1>
+struct Krang2DPlant: public QObject, public Plant<double, 8, 2>
 {
-    using Base                  = Plant<double, 4, 1>;
+    using Base                  = Plant<double, 8, 2>;
     using Scalar                = typename Base::Scalar;
     using State                 = typename Base::State;
     using Control               = typename Base::Control;

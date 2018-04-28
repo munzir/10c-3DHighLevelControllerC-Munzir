@@ -29,41 +29,61 @@ int main(int argc, char **argv)
     Scalar dt = 0.01;
     auto time_steps = util::time_steps(tf, dt);
     int max_iterations = 15;
+    std::cout << "1" << std::endl;
+    // Parameters for the dynamics
+    param p;
+    p.R = 2.500000e-01; p.mw = 5.100000e-01; p.Iw = 5.100000e-03; p.L = 6.000000e-01; p.g=9.800000e+00;
+    p.m_1 = 1.342160e+02;
+    p.MX_1 = 0; p.MY_1 = 8.052960e+01; p.MZ_1 = 0;
+    p.XX_1 = 6.487107e+01; p.YY_1 = 4.473867e+00; p.ZZ_1 = 6.845016e+01;
+    p.XY_1 = 0; p.YZ_1 = 0; p.XZ_1 = 0;
+    p.fric_1 = 15;
+    p.XXw = 1.673438e-02; p.YYw=3.283125e-02; p.ZZw=1.673438e-02;
+    std::cout << "2" << std::endl;
 
     // Dynamics
-    Dynamics cp_dynamics(9.80, 115.25, 0.5, 1.8, 0.25, 0.005, 94.3);
-
+    Dynamics cp_dynamics(p);
+    std::cout << "3" << std::endl;
 
     // Noisy Plant
     Scalar ssigma = 0.00;
     Scalar csigma = 0.00;
     Plant cp_plant(cp_dynamics, dt, ssigma, csigma);
+    std::cout << "4" << std::endl;
 
     // Initial state th, dth, x, dx, desired state, initial control sequence
     Dynamics::State x0 = Dynamics::State::Zero();
-    Dynamics::State xf; xf << 0.0, 0.0, 5, 0.0;
-    Dynamics::ControlTrajectory u = Dynamics::ControlTrajectory::Zero(time_steps);
+    Dynamics::State xf; xf << 2, 0, 0, 0, 0, 0, 0.01, 5;
+    Dynamics::ControlTrajectory u = Dynamics::ControlTrajectory::Zero(2, time_steps);
+    std::cout << "5" << std::endl;
 
     // Costs
     Cost::StateHessian Q;
     Q.setZero();
-    Q.diagonal() << 1, 0.1, 0.1, 0.1;
+    Q.diagonal() << 0,0.1,0.1,0.1,0.1,0.1,0.1,0.1;
+    std::cout << "6" << std::endl;
 
     Cost::ControlHessian R;
-    R << 0.01;
+    R.setZero();
+    R.diagonal() << 0.01, 0.01;
+    std::cout << "7" << std::endl;
 
     TerminalCost::Hessian Qf;
     Qf.setZero();
-    Qf.diagonal() << 10000, 10000, 10000.0, 10000.0;
+    Qf.diagonal() << 0,1e4,1e4,1e4,1e4,1e4,1e4,1e4;
+    std::cout << "8" << std::endl;
 
     Cost cp_cost(xf, Q, R);
     TerminalCost cp_terminal_cost(xf, Qf);
+    std::cout << "9" << std::endl;
 
     // initialize DDP for trajectory planning
     DDP_Opt trej_ddp (dt, time_steps, max_iterations, &logger, verbose);
+    std::cout << "10" << std::endl;
 
     // Get initial trajectory from DDP
     OptimizerResult<Dynamics> traj_results = trej_ddp.run(x0, u, cp_dynamics, cp_cost, cp_terminal_cost);
+    std::cout << "11" << std::endl;
 
     StateTrajectory xs = traj_results.state_trajectory;
     ControlTrajectory us = traj_results.control_trajectory;
@@ -141,8 +161,8 @@ int main(int argc, char **argv)
             // New Goal State
             Dynamics::State x_target = xs.col(k + look_ahead);
 
-            Dynamics::ControlTrajectory u_horizon = Dynamics::ControlTrajectory::Zero(look_ahead);
-            Dynamics::StateTrajectory x_horizon_ref = xs.block(0, k, 4, look_ahead);
+            Dynamics::ControlTrajectory u_horizon = Dynamics::ControlTrajectory::Zero(2, look_ahead);
+            Dynamics::StateTrajectory x_horizon_ref = xs.block(0, k, 8, look_ahead);
 
 //            logger.info("Obtained horizon state trajectory from ddp: ");
 //            for(int m = 0; m < x_horizon_ref.cols(); ++m) {
@@ -162,11 +182,13 @@ int main(int argc, char **argv)
             // initialize DDP for trajectory planning
             DDP_Opt ddp_horizon (dt, look_ahead, max_iterations, &logger, verbose);
 
-            Cost::StateHessian Q_mpc;
+            Cost::StateHessian Q_mpc, Qf_mpc;
             Q_mpc.setZero();
-            Q_mpc.diagonal() << 10, 0.1, 10, 0.1;
+            Q_mpc.diagonal() << 0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1;
+            Qf_mpc.setZero();
+            Qf_mpc.diagonal() << 0, 1e4, 1e4, 1e4, 1e4, 1e4, 1e4, 1e4;
             Cost cp_cost_horizon(x_target, Q_mpc, R);
-            TerminalCost cp_terminal_cost_horizon(x_target, Qf);
+            TerminalCost cp_terminal_cost_horizon(x_target, Qf_mpc);
 
 //
 //            logger.info("\n");
