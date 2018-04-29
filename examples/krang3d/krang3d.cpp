@@ -8,6 +8,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <iostream>
 #include <vector>
+#include <fstream>
 
 int main(int argc, char **argv)
 {
@@ -22,6 +23,8 @@ int main(int argc, char **argv)
 
     // Log output
     util::DefaultLogger logger;
+
+    CSV_writer<Scalar> writer;
     bool verbose = true;
 
     // Timing
@@ -29,7 +32,7 @@ int main(int argc, char **argv)
     Scalar dt = 0.01;
     auto time_steps = util::time_steps(tf, dt);
     int max_iterations = 15;
-    std::cout << "1" << std::endl;
+//    std::cout << "1" << std::endl;
     // Parameters for the dynamics
     param p;
     p.R = 2.500000e-01; p.mw = 5.100000e-01; p.Iw = 5.100000e-03; p.L = 6.000000e-01; p.g=9.800000e+00;
@@ -39,54 +42,56 @@ int main(int argc, char **argv)
     p.XY_1 = 0; p.YZ_1 = 0; p.XZ_1 = 0;
     p.fric_1 = 15;
     p.XXw = 1.673438e-02; p.YYw=3.283125e-02; p.ZZw=1.673438e-02;
-    std::cout << "2" << std::endl;
+//    std::cout << "2" << std::endl;
 
     // Dynamics
     Dynamics cp_dynamics(p);
-    std::cout << "3" << std::endl;
+//    std::cout << "3" << std::endl;
 
     // Noisy Plant
     Scalar ssigma = 0.00;
     Scalar csigma = 0.00;
     Plant cp_plant(cp_dynamics, dt, ssigma, csigma);
-    std::cout << "4" << std::endl;
+//    std::cout << "4" << std::endl;
 
     // Initial state th, dth, x, dx, desired state, initial control sequence
     Dynamics::State x0 = Dynamics::State::Zero();
     Dynamics::State xf; xf << 2, 0, 0, 0, 0, 0, 0.01, 5;
     Dynamics::ControlTrajectory u = Dynamics::ControlTrajectory::Zero(2, time_steps);
-    std::cout << "5" << std::endl;
+//    std::cout << "5" << std::endl;
 
     // Costs
     Cost::StateHessian Q;
     Q.setZero();
     Q.diagonal() << 0,0.1,0.1,0.1,0.1,0.1,0.1,0.1;
-    std::cout << "6" << std::endl;
+//    std::cout << "6" << std::endl;
 
     Cost::ControlHessian R;
     R.setZero();
     R.diagonal() << 0.01, 0.01;
-    std::cout << "7" << std::endl;
+//    std::cout << "7" << std::endl;
 
     TerminalCost::Hessian Qf;
     Qf.setZero();
     Qf.diagonal() << 0,1e4,1e4,1e4,1e4,1e4,1e4,1e4;
-    std::cout << "8" << std::endl;
+//    std::cout << "8" << std::endl;
 
     Cost cp_cost(xf, Q, R);
     TerminalCost cp_terminal_cost(xf, Qf);
-    std::cout << "9" << std::endl;
+//    std::cout << "9" << std::endl;
 
     // initialize DDP for trajectory planning
     DDP_Opt trej_ddp (dt, time_steps, max_iterations, &logger, verbose);
-    std::cout << "10" << std::endl;
+//    std::cout << "10" << std::endl;
 
     // Get initial trajectory from DDP
     OptimizerResult<Dynamics> traj_results = trej_ddp.run(x0, u, cp_dynamics, cp_cost, cp_terminal_cost);
-    std::cout << "11" << std::endl;
+//    std::cout << "11" << std::endl;
 
     StateTrajectory xs = traj_results.state_trajectory;
     ControlTrajectory us = traj_results.control_trajectory;
+
+    writer.save_trajectory(xs, us, "initial_traj.csv");
 
     logger.info("Obtained initial state trajectory");
     for (int m = 0; m < xs.cols(); ++m) {
@@ -139,6 +144,10 @@ int main(int argc, char **argv)
         Dynamics::State x = x0;
         Dynamics::State x_old = x0;
 
+        StateTrajectory mpc_xs = xs.replicate(1, 1);
+        ControlTrajectory mpc_us = us.replicate(1, 1);
+
+        mpc_xs.col(0) = x0;
         // For Each Time Step
         for (int k = 0; k < (time_steps - 1); ++k) {
             int look_ahead;
@@ -235,9 +244,17 @@ int main(int argc, char **argv)
             logger.info("reference state %f", xs(2, k));
             x = cp_plant.f_with_ref(x_old, u_new, xs.col(k), us.col(k));
             x_old = x;
+            mpc_us.col(k) = u_new;
+            mpc_xs.col(k + 1) = x;
         }
+
+        writer.save_trajectory(mpc_xs, mpc_us, "mpc_trajectory.csv");
 
     });
 
     return a.exec();
+}
+
+void save_traj() {
+
 }
