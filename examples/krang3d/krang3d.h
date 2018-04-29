@@ -11,6 +11,7 @@
 #include <ddp/eigenmvn.hpp>
 #include <QtCore>
 #include <QVector>
+#include <fstream>
 
 
 struct param {
@@ -301,5 +302,32 @@ Q_OBJECT
     Eigen::EigenMultivariateNormal<Scalar, ControlSize> cdist_;
 };
 
+template <class T>
+struct CSV_writer {
+    using StateTrajectory   = Eigen::Matrix<T, 8, Eigen::Dynamic>;
+    using ControlTrajectory = Eigen::Matrix<T, 2, Eigen::Dynamic>;
+
+    CSV_writer() {}
+
+    void save_trajectory(StateTrajectory &xs, ControlTrajectory &us, std::string fileName) {
+        std::ofstream outFile;
+        outFile.open(fileName);
+
+        int traj_len = xs.cols();
+        int u_len = us.cols();
+
+        for (int m = 0; m < traj_len; ++m) {
+            for (int j = 0; j < 8; j++) outFile << xs(j, m) << ", ";
+            if (m < u_len) {
+                outFile << us(0, m) << ", " << us(1, m);
+            } else {
+                outFile << "0.0, 0.0";
+            }
+            outFile << std::endl;
+        }
+        outFile.close();
+    }
+
+};
 
 #endif //DDP_KRANG3D_H
