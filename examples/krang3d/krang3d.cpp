@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     // Connect signals and configure plot window
     QApplication a(argc, argv);
     // final angle, then position
-    MainWindow win(xf(0), xf(2), dt);
+    MainWindow win(xf(6), xf(7), xf(2), dt);
     QObject::connect(&cp_plant, &Plant::update, &win, &MainWindow::update, Qt::QueuedConnection);
     win.show();
 

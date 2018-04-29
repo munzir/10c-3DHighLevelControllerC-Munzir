@@ -14,15 +14,17 @@ class MainWindow : public QMainWindow
 
 public:
     using Scalar = double;
-    explicit MainWindow(Scalar anglef, Scalar positionf, Scalar dt, QWidget *parent = 0);
+    explicit MainWindow(Scalar pos_xf, Scalar pos_yf, Scalar anglef, Scalar dt, QWidget *parent = 0);
     ~MainWindow();
 
 public slots:
-    void update(const QVector<Scalar> &x, const QVector<Scalar> &u, const QVector<Scalar> &x_ref, const QVector<Scalar> &u_ref);
+    void update(const QVector<Scalar> &x, const QVector<Scalar> &u, const QVector<Scalar> &x_ref,
+                const QVector<Scalar> &u_ref);
 
 private:
     Scalar anglef_;
-    Scalar positionf_;
+    Scalar pos_xf_;
+    Scalar pos_yf_;
     Scalar dt_;
     Ui::MainWindow *ui;
 };
